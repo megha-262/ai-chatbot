@@ -389,3 +389,5 @@ export default function Home() {
     </div>
   );
 }
+
+import Link from 'next/link';
