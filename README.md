@@ -400,11 +400,7 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 👥 Team
 
-- **Megha Kumari** - Lead Developer - Computer Science, Banasthali Vidyapith
-- **Lovely Pandey** - Frontend Developer - Banasthali Vidyapith  
-- **Anupriya** - Backend Developer - Banasthali Vidyapith
 
 ## 🙏 Acknowledgments
 
