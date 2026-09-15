@@ -233,7 +233,7 @@ yarn install
 Create a `.env.local` file in the root directory:
 ```env
 # Google AI Configuration
-GOOGLE_AI_API_KEY=your_google_ai_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
 
 # MongoDB Configuration
 MONGODB_URI=mongodb://localhost:27017/healthbot
@@ -289,7 +289,7 @@ npm start
 
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
-| `GOOGLE_AI_API_KEY` | Google AI API key for Gemini | Yes | - |
+| `GEMINI_API_KEY` | Google Gemini API key (server-side only) | Yes | - |
 | `MONGODB_URI` | MongoDB connection string | Yes | - |
 | `NEXTAUTH_SECRET` | NextAuth.js secret key | Yes | - |
 | `NEXTAUTH_URL` | Application URL | Yes | http://localhost:3000 |

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface HealthMetric {
   id: string;
@@ -13,16 +13,42 @@ interface HealthMetric {
   icon: string;
 }
 
-interface ChatHistory {
+interface CurrentUser {
   id: string;
-  date: string;
-  topic: string;
-  summary: string;
-  type: 'general' | 'symptom' | 'emergency';
+  name: string;
+  email: string;
+}
+
+interface ConversationSummary {
+  _id: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
 }
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'metrics' | 'history' | 'goals'>('overview');
+  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/auth/me').then((res) => res.json()),
+      fetch('/api/chat').then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to load chat data');
+        return data;
+      }),
+    ])
+      .then(([authData, chatData]) => {
+        setUser(authData.user ?? null);
+        setConversations(chatData.conversations ?? []);
+      })
+      .catch((err) => setLoadError(err.message || 'Failed to load dashboard data'))
+      .finally(() => setIsLoading(false));
+  }, []);
 
   const healthMetrics: HealthMetric[] = [
     {
@@ -63,30 +89,6 @@ export default function DashboardPage() {
     }
   ];
 
-  const chatHistory: ChatHistory[] = [
-    {
-      id: '1',
-      date: '2024-01-15',
-      topic: 'Headache symptoms',
-      summary: 'Discussed tension headaches and stress management techniques',
-      type: 'symptom'
-    },
-    {
-      id: '2',
-      date: '2024-01-14',
-      topic: 'Nutrition advice',
-      summary: 'Asked about healthy meal planning and vitamin supplements',
-      type: 'general'
-    },
-    {
-      id: '3',
-      date: '2024-01-12',
-      topic: 'Exercise recommendations',
-      summary: 'Discussed safe workout routines for beginners',
-      type: 'general'
-    }
-  ];
-
   const healthGoals = [
     { id: '1', goal: 'Drink 8 glasses of water daily', progress: 75, target: 100 },
     { id: '2', goal: 'Exercise 30 minutes, 5 times a week', progress: 60, target: 100 },
@@ -103,21 +105,35 @@ export default function DashboardPage() {
     }
   };
 
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'symptom': return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300';
-      case 'emergency': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
-      default: return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
-    }
-  };
+  const formatDate = (iso: string) =>
+    new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+
+  const totalMessages = conversations.reduce((sum, c) => sum + c.messageCount, 0);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {loadError && (
+          <div className="mb-6 px-4 py-3 rounded-lg bg-red-50 dark:bg-red-900/40 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
+            {loadError}
+          </div>
+        )}
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Health Dashboard</h1>
-          <p className="text-gray-600 dark:text-gray-300">Track your health metrics, chat history, and wellness goals</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            {user ? `Welcome back, ${user.name}` : 'Health Dashboard'}
+          </h1>
+          <p className="text-gray-600 dark:text-gray-300">
+            {user ? user.email : 'Track your health metrics, chat history, and wellness goals'}
+          </p>
         </div>
 
         {/* Quick Stats */}
@@ -131,7 +147,7 @@ export default function DashboardPage() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Chats</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">24</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">{conversations.length}</p>
               </div>
             </div>
           </div>
@@ -168,12 +184,12 @@ export default function DashboardPage() {
             <div className="flex items-center">
               <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900 rounded-lg flex items-center justify-center">
                 <svg className="w-6 h-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                 </svg>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Last Check-in</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">2h ago</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Messages</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalMessages}</p>
               </div>
             </div>
           </div>
@@ -236,20 +252,21 @@ export default function DashboardPage() {
             {/* Recent Chat Activity */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Chat Activity</h3>
-              <div className="space-y-4">
-                {chatHistory.slice(0, 3).map((chat) => (
-                  <div key={chat.id} className="border-l-4 border-blue-500 pl-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="font-medium text-gray-900 dark:text-white">{chat.topic}</p>
-                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getTypeColor(chat.type)}`}>
-                        {chat.type}
-                      </span>
+              {conversations.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">No conversations yet — start a chat to see it here.</p>
+              ) : (
+                <div className="space-y-4">
+                  {conversations.slice(0, 3).map((conv) => (
+                    <div key={conv._id} className="border-l-4 border-blue-500 pl-4">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="font-medium text-gray-900 dark:text-white">Conversation</p>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{conv.messageCount} messages</span>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{formatDate(conv.updatedAt)}</p>
                     </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">{chat.summary}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{chat.date}</p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -284,25 +301,24 @@ export default function DashboardPage() {
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Chat History</h3>
             </div>
-            <div className="divide-y divide-gray-200 dark:divide-gray-700">
-              {chatHistory.map((chat) => (
-                <div key={chat.id} className="p-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-lg font-medium text-gray-900 dark:text-white">{chat.topic}</h4>
-                    <div className="flex items-center space-x-2">
-                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getTypeColor(chat.type)}`}>
-                        {chat.type}
-                      </span>
-                      <span className="text-sm text-gray-500 dark:text-gray-400">{chat.date}</span>
+            {conversations.length === 0 ? (
+              <p className="p-6 text-sm text-gray-500 dark:text-gray-400">No conversations yet — start a chat to see your history here.</p>
+            ) : (
+              <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                {conversations.map((conv) => (
+                  <div key={conv._id} className="p-6">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-lg font-medium text-gray-900 dark:text-white">Conversation</h4>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">{formatDate(conv.updatedAt)}</span>
                     </div>
+                    <p className="text-gray-600 dark:text-gray-300 mb-3">{conv.messageCount} messages</p>
+                    <Link href="/chat" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm font-medium">
+                      Continue conversation →
+                    </Link>
                   </div>
-                  <p className="text-gray-600 dark:text-gray-300 mb-3">{chat.summary}</p>
-                  <Link href="/chat" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm font-medium">
-                    Continue conversation →
-                  </Link>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -330,12 +346,33 @@ export default function DashboardPage() {
 
         {/* Quick Actions */}
         <div className="mt-12 text-center">
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-4">
+            Quick Access
+          </h3>
+          <div className="flex flex-wrap gap-4 justify-center">
             <Link href="/chat" className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
               Start New Chat
+            </Link>
+            <Link href="/profile" className="inline-flex items-center px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              Profile
+            </Link>
+            <Link href="/health-tools?tab=symptoms" className="inline-flex items-center px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors">
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Symptom Checker
+            </Link>
+            <Link href="/health-tools?tab=medicine" className="inline-flex items-center px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+              </svg>
+              Medicine Information
             </Link>
             <Link href="/emergency" className="inline-flex items-center px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

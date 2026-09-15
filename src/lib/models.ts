@@ -4,6 +4,7 @@ import { ObjectId } from 'mongodb';
 export interface ChatMessage {
   _id?: ObjectId;
   conversationId: string;
+  userId?: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
@@ -17,7 +18,7 @@ export interface ChatMessage {
 // Conversation interface
 export interface Conversation {
   _id?: ObjectId;
-  userId?: string;
+  userId: string;
   sessionId: string;
   title?: string;
   createdAt: Date;
@@ -31,18 +32,33 @@ export interface Conversation {
   };
 }
 
-// User interface (for future user management)
-export interface User {
-  _id?: ObjectId;
-  email?: string;
-  name?: string;
-  createdAt: Date;
-  lastActive: Date;
+// Optional, non-sensitive health profile fields a user may choose to add
+export interface HealthProfile {
+  age?: number;
+  gender?: string;
+  bloodGroup?: string;
   preferences?: {
-    language?: string;
-    timezone?: string;
     notifications?: boolean;
   };
+}
+
+// User interface (authentication)
+export interface User {
+  _id?: ObjectId;
+  name: string;
+  email: string;
+  passwordHash: string;
+  createdAt: Date;
+  updatedAt: Date;
+  healthProfile?: HealthProfile;
+}
+
+// User data safe to send to the client — never includes passwordHash
+export interface SafeUser {
+  id: string;
+  name: string;
+  email: string;
+  healthProfile?: HealthProfile;
 }
 
 // Chat request/response types for API
@@ -50,6 +66,7 @@ export interface ChatRequest {
   message: string;
   conversationId?: string;
   sessionId: string;
+  language?: 'en' | 'hi';
 }
 
 export interface ChatResponse {
