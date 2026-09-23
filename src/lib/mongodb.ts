@@ -2,8 +2,45 @@ import { MongoClient, Db, Collection } from 'mongodb';
 
 const options = {};
 
-let client: MongoClient;
 let clientPromise: Promise<MongoClient> | undefined;
+
+// Strips any credentials out of a driver error message before it's logged —
+// defense in depth on top of the driver's own redaction, since we must never
+// log the connection string or password.
+function safeErrorMessage(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.replace(/mongodb(\+srv)?:\/\/[^@\s]+@/gi, 'mongodb$1://<redacted>@');
+}
+
+function connect(uri: string): Promise<MongoClient> {
+  const newClient = new MongoClient(uri, options);
+  return newClient
+    .connect()
+    .catch((err) => {
+      // Enough detail to diagnose in Vercel's function logs (error name/code
+      // and a credential-redacted message), without ever logging secrets.
+      console.error(
+        'MongoDB connection failed:',
+        err instanceof Error ? err.name : typeof err,
+        err && typeof err === 'object' && 'code' in err ? (err as { code?: unknown }).code : undefined,
+        safeErrorMessage(err)
+      );
+
+      // Don't leave a rejected promise cached: on serverless, a single
+      // transient failure (e.g. a cold-start network blip) would otherwise
+      // permanently poison every subsequent request on this warm instance.
+      // Clearing the cache lets the next request retry with a fresh attempt.
+      clientPromise = undefined;
+      if (process.env.NODE_ENV === 'development') {
+        const globalWithMongo = global as typeof globalThis & {
+          _mongoClientPromise?: Promise<MongoClient>;
+        };
+        globalWithMongo._mongoClientPromise = undefined;
+      }
+
+      throw err;
+    });
+}
 
 function getClientPromise(): Promise<MongoClient> {
   if (clientPromise) return clientPromise;
@@ -21,14 +58,12 @@ function getClientPromise(): Promise<MongoClient> {
     };
 
     if (!globalWithMongo._mongoClientPromise) {
-      client = new MongoClient(uri, options);
-      globalWithMongo._mongoClientPromise = client.connect();
+      globalWithMongo._mongoClientPromise = connect(uri);
     }
     clientPromise = globalWithMongo._mongoClientPromise;
   } else {
     // In production mode, it's best to not use a global variable.
-    client = new MongoClient(uri, options);
-    clientPromise = client.connect();
+    clientPromise = connect(uri);
   }
 
   return clientPromise;
