@@ -6,6 +6,15 @@ import { useRouter } from 'next/navigation';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Where to go after login: the page the middleware bounced the user from
+// (?next=), as long as it's a same-site path — never an external URL, and
+// never back to the auth pages themselves.
+function getPostLoginPath(): string {
+  const next = new URLSearchParams(window.location.search).get('next');
+  const isInternal = !!next && next.startsWith('/') && !next.startsWith('//') && !next.includes('\\');
+  return next && isInternal && !/^\/(login|signup)([/?#]|$)/.test(next) ? next : '/dashboard';
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -19,7 +28,7 @@ export default function LoginPage() {
     fetch('/api/auth/me')
       .then((res) => res.json())
       .then((data) => {
-        if (!cancelled && data.user) router.replace('/dashboard');
+        if (!cancelled && data.user) router.replace(getPostLoginPath());
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -48,7 +57,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push('/dashboard');
+      router.push(getPostLoginPath());
       router.refresh();
     } catch {
       setError('Unable to reach the server. Please check your connection and try again.');
